@@ -163,3 +163,5 @@ cython_debug/
 # dataset
 dataset
 dino_output
+best_model
+log
