@@ -129,17 +129,13 @@ def get_args_parser():
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
     
     # WANDB logging
-    parser.add_argument('--wandb_project_name', default='DINO_Project', type=str,
-                    help='The name of the wandb project for logging.')
-    parser.add_argument('--wandb_entity', default=None, type=str,
-                        help='The entity (user or team) of wandb for logging.')
     parser.add_argument('--use_wandb', action='store_true',
                         help='Use wandb for logging.')
     return parser
 
 def train_dino(args):
     if args.use_wandb:
-        wandb.init(project=args.wandb_project_name, entity=args.wandb_entity, name="DINO test run")
+        wandb.init(project='DINO_Project', name="DINO test run")
         wandb.config.update(args)
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
