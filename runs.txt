@@ -1,12 +1,12 @@
 # Osnet pretrain with DINO
 # Command
-python main_dino.py --arch osnet --optimizer adamw --lr 0.03 --weight_decay 1e-4 --global_crops_scale 0.4 1 --local_crops_scale 0.05 0.4 --data_path ./dataset/PA-100K/processed_dino --output_dir ./dino_output --use_wandb --wandb_name pretrain_osnet_with_dino
+python main_dino.py --arch osnet --optimizer sgd --lr 0.03 --weight_decay 1e-4 --weight_decay_end 1e-4 --global_crops_scale 0.4 1 --local_crops_scale 0.05 0.4 --data_path ./dataset/PA-100K/processed_imgs_for_dino --output_dir ./dino_output --use_wandb --wandb_name pretrain_osnet_with_dino
 
 # Logs
 arch: osnet
 batch_size_per_gpu: 64
 clip_grad: 3.0
-data_path: ./dataset/PA-100K/processed_dino
+data_path: ./dataset/PA-100K/processed_imgs_for_dino
 dist_url: env://
 drop_path_rate: 0.1
 epochs: 100
@@ -37,6 +37,50 @@ warmup_epochs: 10
 warmup_teacher_temp: 0.04
 warmup_teacher_temp_epochs: 0
 weight_decay: 0.0001
-weight_decay_end: 0.4
+weight_decay_end: 0.0001
 world_size: 1
-Data loaded: there are 100000 images.
+Data loaded: there are 25000 images.
+
+# Resnet50 pretrain with DINO
+# Command
+conda activate /raid/biplab/phduser1/Munish/envs/dino_env
+python main_dino.py --arch resnet50 --optimizer adamw --weight_decay 1e-4 --weight_decay_end 1e-4 --global_crops_scale 0.4 1 --local_crops_scale 0.05 0.4 --data_path ./dataset/PA-100K/processed_imgs_for_dino --output_dir ./dino_output --use_wandb --wandb_name pretrain_resnet50_with_dino
+
+# Logs
+arch: resnet50
+batch_size_per_gpu: 64
+clip_grad: 3.0
+data_path: ./dataset/PA-100K/processed_imgs_for_dino
+dist_url: env://
+drop_path_rate: 0.1
+epochs: 100
+freeze_last_layer: 1
+global_crops_scale: [0.4, 1.0]
+gpu: 0
+local_crops_number: 8
+local_crops_scale: [0.05, 0.4]
+local_rank: 0
+lr: 0.03
+min_lr: 1e-06
+momentum_teacher: 0.996
+norm_last_layer: True
+num_workers: 10
+optimizer: adamw
+out_dim: 65536
+output_dir: ./dino_output
+patch_size: 16
+rank: 0
+saveckp_freq: 20
+seed: 0
+teacher_temp: 0.04
+use_bn_in_head: False
+use_fp16: True
+use_wandb: True
+wandb_name: pretrain_resnet50_with_dino
+warmup_epochs: 10
+warmup_teacher_temp: 0.04
+warmup_teacher_temp_epochs: 0
+weight_decay: 0.0001
+weight_decay_end: 0.0001
+world_size: 1
+Data loaded: there are 25000 images.
