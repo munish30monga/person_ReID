@@ -168,3 +168,9 @@ log
 
 # model weights
 *.pth
+
+# dataset
+*.zip
+
+# wandb
+wandb

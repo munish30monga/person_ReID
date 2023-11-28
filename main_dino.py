@@ -131,11 +131,12 @@ def get_args_parser():
     # WANDB logging
     parser.add_argument('--use_wandb', action='store_true',
                         help='Use wandb for logging.')
+    parser.add_argument('--wandb_name', default='test_run', type=str, help='Name of wandb run.')
     return parser
 
 def train_dino(args):
     if args.use_wandb:
-        wandb.init(project='DINO_Project', name="DINO test run")
+        wandb.init(project='DINO_Project', name=args.wandb_name)
         wandb.config.update(args)
     utils.init_distributed_mode(args)
     utils.fix_random_seeds(args.seed)
@@ -384,7 +385,6 @@ def train_one_epoch(student, teacher, teacher_without_ddp, dino_loss, data_loade
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
-
 
 class DINOLoss(nn.Module):
     def __init__(self, out_dim, ncrops, warmup_teacher_temp, teacher_temp,
