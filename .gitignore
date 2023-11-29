@@ -174,3 +174,7 @@ log
 
 # wandb
 wandb
+
+# imgs
+*.jpg
+*.png
