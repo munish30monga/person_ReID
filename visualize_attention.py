@@ -104,7 +104,7 @@ if __name__ == '__main__':
         help="Path to pretrained weights to load.")
     parser.add_argument("--checkpoint_key", default="teacher", type=str,
         help='Key to use in the checkpoint (example: "teacher")')
-    parser.add_argument("--image_path", default='./dataset/PA-100K/processed_imgs_for_dino/class_0/000636.jpg', type=str, help="Path of the image to load.")
+    parser.add_argument("--image_path", default='./dataset/PA-100K/dino_training_imgs/000071.jpg', type=str, help="Path of the image to load.")
     parser.add_argument("--image_size", default=(396, 155), type=int, nargs="+", help="Resize image.")
     parser.add_argument('--output_dir', default='./imgs/2', help='Path where to save visualizations.')
     parser.add_argument("--threshold", type=float, default=None, help="""We visualize masks

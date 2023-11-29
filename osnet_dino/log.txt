@@ -11,3 +11,6 @@
 {"train_Loss": 10.082228516309689, "train_Learning_Rate": 0.007499241530201201, "train_Weight_Decay": 0.00010000000000000024, "epoch": 10}
 {"train_Loss": 10.007071382571489, "train_Learning_Rate": 0.007494680122747537, "train_Weight_Decay": 0.00010000000000000024, "epoch": 11}
 {"train_Loss": 9.895460583613469, "train_Learning_Rate": 0.007485557008561019, "train_Weight_Decay": 0.00010000000000000024, "epoch": 12}
+{"train_Loss": 9.855353590158316, "train_Learning_Rate": 0.007471883302751021, "train_Weight_Decay": 0.00010000000000000024, "epoch": 13}
+{"train_Loss": 9.687646088233361, "train_Learning_Rate": 0.007453675664621777, "train_Weight_Decay": 0.00010000000000000024, "epoch": 14}
+{"train_Loss": 9.750611557104648, "train_Learning_Rate": 0.0074309562773756535, "train_Weight_Decay": 0.00010000000000000024, "epoch": 15}
