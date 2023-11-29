@@ -17,98 +17,7 @@ from utils import MultiCropWrapper                                  # for deep l
 from collections import OrderedDict                                 # for deep learning functionality   
 from torchsummary import summary                                    # for model summary    
 import argparse                                                     # for command line argument parsing     
-import wandb                                                        # for logging training runs                       
-
-# def load_pretrained_dino_model(base_model, pretrained_model_path, device):
-#     student = torchvision_models.__dict__[base_model]()
-#     embed_dim = student.fc.weight.shape[1]
-#     student = MultiCropWrapper(student, DINOHead(
-#         embed_dim,
-#         65536,
-#         use_bn=False,
-#         norm_last_layer=True,
-#     ))
-#     student = student.to(device)
-#     saved_state_dict = torch.load(pretrained_model_path, map_location=device)
-#     new_state_dict = OrderedDict()
-#     for k, v in saved_state_dict["student"].items():
-#         name = k[7:]  # remove "module." prefix
-#         new_state_dict[name] = v
-#     student.load_state_dict(new_state_dict)
-#     return student
-
-# def extract_vanilla_resnet50(pretrained_model, unfreeze_last_n):
-#     resnet50 = torchvision_models.resnet50(weights=None)
-#     state_dict_pretrained = pretrained_model.state_dict()
-#     state_dict_resnet50 = resnet50.state_dict()
-
-#     for name, param in state_dict_resnet50.items():
-#         if name in state_dict_pretrained:
-#             state_dict_resnet50[name] = state_dict_pretrained[name]
-    
-#     resnet50.load_state_dict(state_dict_resnet50)
-        
-#     if unfreeze_last_n == -1:
-#         for param in resnet50.parameters():
-#             param.requires_grad = True
-            
-#     elif unfreeze_last_n == 0:
-#         for param in resnet50.parameters():
-#             param.requires_grad = False
-            
-#     else:
-#         for param in resnet50.parameters():
-#             param.requires_grad = False
-
-#         num_layers = len(list(resnet50.children()))
-#         for i, child in enumerate(resnet50.children()):
-#             if i >= num_layers - unfreeze_last_n:
-#                 for param in child.parameters():
-#                     param.requires_grad = True
-                    
-#     return resnet50
-
-# def extract_vanilla_osnet(pretrained_model, unfreeze_last_n):
-#     # Create a new vanilla OSNet model
-#     osnet = torchreid.models.build_model(
-#         name='osnet_x1_0',
-#         num_classes=0, # Assuming we don't need the classifier for feature extraction
-#         pretrained=False
-#     )
-    
-#     # Copy the weights from the pretrained model (excluding the DINO head or classifier)
-#     state_dict_pretrained = pretrained_model.state_dict()
-#     state_dict_osnet = osnet.state_dict()
-
-#     for name, param in state_dict_osnet.items():
-#         if name in state_dict_pretrained:
-#             state_dict_osnet[name] = state_dict_pretrained[name]
-
-#     osnet.load_state_dict(state_dict_osnet)
-
-#     # Handle unfreezing of layers
-#     if unfreeze_last_n == -1:
-#         # Make all layers trainable
-#         for param in osnet.parameters():
-#             param.requires_grad = True
-#     elif unfreeze_last_n == 0:
-#         # Make all layers frozen
-#         for param in osnet.parameters():
-#             param.requires_grad = False
-#     else:
-#         # Freeze all layers initially
-#         for param in osnet.parameters():
-#             param.requires_grad = False
-
-#         # Unfreeze the last n layers
-#         children = list(osnet.children())
-#         num_children = len(children)
-#         for i, child in enumerate(children):
-#             if i >= num_children - unfreeze_last_n:
-#                 for param in child.parameters():
-#                     param.requires_grad = True
-
-#     return osnet
+import wandb                                                        # for logging training runs                      
 
 def load_pretrained_dino_model(base_model, pretrained_model_path, device):
     # Check if the base model is OSNet
@@ -197,7 +106,8 @@ def create_base_models(base_model, datamanager, device):
         )
     else:
         model = torchvision_models.__dict__[base_model]()
-        model.fc = nn.Identity()
+    print(model)
+    # quit()
     return model.to(device)
     
 def setup_datamanager(dataset_dir, args):
@@ -214,8 +124,26 @@ def setup_datamanager(dataset_dir, args):
     )
     return datamanager
 
+class WandbLogger(object):
+    def __init__(self, args):
+        wandb.init(name=args.wanb_name)
+        wandb.config.update(args)
+
+    def log_metrics(self, epoch, train_metrics, val_metrics):
+        metrics = {
+            'epoch': epoch,
+            'train_loss': train_metrics['loss'],
+            'train_acc': train_metrics['acc'],
+            'val_mAP': val_metrics['mAP'],
+            'val_rank1': val_metrics['rank1'],
+            'val_rank5': val_metrics['rank5'],
+            'val_rank10': val_metrics['rank10'],
+            'val_rank20': val_metrics['rank20'],
+        }
+        wandb.log(metrics)
+        
 def main():
-    parser = argparse.ArgumentParser(description='Fine-tune ResNet50 model')
+    parser = argparse.ArgumentParser(description='Fine-tune Models')
     parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train')
     parser.add_argument('--learning_rate', type=float, default=0.0003, help='Learning rate')
@@ -235,8 +163,7 @@ def main():
     
     # Logging
     if args.use_wandb:
-        wandb.init(project='DINO_Project', name=args.wandb_name)
-        wandb.config.update(args)
+        wandb_logger = WandbLogger(args)
         
     # Environment setup
     os.environ['CUDA_VISIBLE_DEVICES'] = '0'
@@ -284,7 +211,7 @@ def main():
 
     # Run training
     engine.run(max_epoch=args.epochs, save_dir=logs_dir, eval_freq=5, print_freq=1, test_only=False)
-
+    
 if __name__ == "__main__":
     main()
 
