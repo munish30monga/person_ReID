@@ -162,9 +162,11 @@ cython_debug/
 
 # dataset
 dataset
+datasets
 dino_output
 best_model
 log
+logs
 
 # model weights
 *.pth
@@ -178,3 +180,6 @@ wandb
 # imgs
 *.jpg
 *.png
+
+# torchreid
+deep-person-reid

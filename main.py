@@ -1,29 +1,31 @@
-import random                                                       # for random number generation
-import matplotlib.pyplot as plt                                     # for plotting 
-import os                                                           # for file handling
-import torch                                                        # for deep learning functionality
-from prettytable import PrettyTable                                 # for table formatting
-import matplotlib.image as mpimg                                    # for image plotting
-import pathlib as pl                                                # for path handling.
-import shutil                                                       # for file handling
-from torchreid import models, utils                                 # for deep learning functionality
-import torchreid                                                    # for deep learning functionality
-import torchvision.models as models                                 # for deep learning functionality
-import torch.nn as nn                                               # for deep learning functionality
-import sys                                                          # for system functionality
-from vision_transformer import DINOHead                             # for deep learning functionality  
-from torchvision import models as torchvision_models                # for deep learning functionality
-from utils import MultiCropWrapper                                  # for deep learning functionality
-from collections import OrderedDict                                 # for deep learning functionality   
-from torchsummary import summary                                    # for model summary    
-import argparse                                                     # for command line argument parsing     
-import wandb                                                        # for logging training runs   
-from icecream import ic                                             # for debugging  
-ic.disable()                                                        # disable icecream debugging                 
+import sys
+import time
+import os.path as osp
+import argparse
+import torch
+import torch.nn as nn
+import torchreid
+from collections import OrderedDict
+from utils import MultiCropWrapper
+from vision_transformer import DINOHead
+from torchvision import models as torchvision_models
+from icecream import ic
+ic.disable()
 
-def load_pretrained_dino_model(base_model, pretrained_model_path, device):
+
+from torchreid.utils import (
+    Logger, check_isfile, set_random_seed, collect_env_info,
+    resume_from_checkpoint, load_pretrained_weights, compute_model_complexity
+)
+
+from default_config import (
+    imagedata_kwargs, optimizer_kwargs, videodata_kwargs, engine_run_kwargs,
+    get_default_config, lr_scheduler_kwargs
+)
+
+def load_pretrained_dino_model(base_model, pretrained_model_path):
     # Check if the base model is OSNet
-    if base_model == 'osnet':
+    if base_model == 'osnet_x1_0':
         student = torchreid.models.build_model(
             name='osnet_x1_0',
             num_classes=0,  # Assuming we don't need the classifier for feature extraction
@@ -48,7 +50,7 @@ def load_pretrained_dino_model(base_model, pretrained_model_path, device):
     ic(student)
 
     # Load the pretrained model weights
-    saved_state_dict = torch.load(pretrained_model_path, map_location=device)
+    saved_state_dict = torch.load(pretrained_model_path)
     new_state_dict = OrderedDict()
     for k, v in saved_state_dict["student"].items():
         name = k[7:]  # Remove "module." prefix if present
@@ -57,8 +59,8 @@ def load_pretrained_dino_model(base_model, pretrained_model_path, device):
     
     return student
 
-def extract_vanilla_model(pretrained_model, model_type, datamanager, unfreeze_last_n):
-    if model_type == 'osnet':
+def extract_vanilla_model(pretrained_model, arch, datamanager, unfreeze_last_n):
+    if arch == 'osnet_x1_0':
         model = torchreid.models.build_model(
             name='osnet_x1_0',
             num_classes=datamanager.num_train_pids,
@@ -68,7 +70,7 @@ def extract_vanilla_model(pretrained_model, model_type, datamanager, unfreeze_la
         state_dict_model = model.state_dict()
         
     else:
-        model = torchvision_models.__dict__[model_type]()
+        model = torchvision_models.__dict__[arch]()
         state_dict_model = model.state_dict()
         
     # Copy the weights from the pretrained model
@@ -99,129 +101,185 @@ def extract_vanilla_model(pretrained_model, model_type, datamanager, unfreeze_la
    
     return model
 
-def create_base_models(base_model, datamanager, device):
-    if base_model == 'osnet':
-        model = torchreid.models.build_model(
-            name='osnet_x1_0',
-            num_classes=datamanager.num_train_pids,
-            pretrained=False,
-            loss='softmax',
-        )
+def build_datamanager(cfg):
+    if cfg.data.type == 'image':
+        return torchreid.data.ImageDataManager(**imagedata_kwargs(cfg))
     else:
-        model = torchvision_models.__dict__[base_model]()
+        return torchreid.data.VideoDataManager(**videodata_kwargs(cfg))
 
-    return model.to(device)
-    
-def setup_datamanager(dataset_dir, args):
-    datamanager = torchreid.data.ImageDataManager(
-        root=dataset_dir,
-        sources='market1501',
-        targets='market1501',
-        height=256,
-        width=128,
-        batch_size_train=args.batch_size_train,
-        batch_size_test=args.batch_size_test,
-        transforms=['random_flip', 'random_crop'],
-        combineall=False,
-    )
-    return datamanager
 
-class WandbLogger(object):
-    def __init__(self, args):
-        wandb.init(name=args.wanb_name)
-        wandb.config.update(args)
+def build_engine(cfg, datamanager, model, optimizer, scheduler):
+    if cfg.data.type == 'image':
+        if cfg.loss.name == 'softmax':
+            engine = torchreid.engine.ImageSoftmaxEngine(
+                datamanager,
+                model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                use_gpu=cfg.use_gpu,
+                label_smooth=cfg.loss.softmax.label_smooth
+            )
 
-    def log_metrics(self, epoch, train_metrics, val_metrics):
-        metrics = {
-            'epoch': epoch,
-            'train_loss': train_metrics['loss'],
-            'train_acc': train_metrics['acc'],
-            'val_mAP': val_metrics['mAP'],
-            'val_rank1': val_metrics['rank1'],
-            'val_rank5': val_metrics['rank5'],
-            'val_rank10': val_metrics['rank10'],
-            'val_rank20': val_metrics['rank20'],
-        }
-        wandb.log(metrics)
-        
+        else:
+            engine = torchreid.engine.ImageTripletEngine(
+                datamanager,
+                model,
+                optimizer=optimizer,
+                margin=cfg.loss.triplet.margin,
+                weight_t=cfg.loss.triplet.weight_t,
+                weight_x=cfg.loss.triplet.weight_x,
+                scheduler=scheduler,
+                use_gpu=cfg.use_gpu,
+                label_smooth=cfg.loss.softmax.label_smooth
+            )
+
+    else:
+        if cfg.loss.name == 'softmax':
+            engine = torchreid.engine.VideoSoftmaxEngine(
+                datamanager,
+                model,
+                optimizer=optimizer,
+                scheduler=scheduler,
+                use_gpu=cfg.use_gpu,
+                label_smooth=cfg.loss.softmax.label_smooth,
+                pooling_method=cfg.video.pooling_method
+            )
+
+        else:
+            engine = torchreid.engine.VideoTripletEngine(
+                datamanager,
+                model,
+                optimizer=optimizer,
+                margin=cfg.loss.triplet.margin,
+                weight_t=cfg.loss.triplet.weight_t,
+                weight_x=cfg.loss.triplet.weight_x,
+                scheduler=scheduler,
+                use_gpu=cfg.use_gpu,
+                label_smooth=cfg.loss.softmax.label_smooth
+            )
+
+    return engine
+
+
+def reset_config(cfg, args):
+    if args.root:
+        cfg.data.root = args.root
+    if args.sources:
+        cfg.data.sources = args.sources
+    if args.targets:
+        cfg.data.targets = args.targets
+    if args.transforms:
+        cfg.data.transforms = args.transforms
+
+
+def check_cfg(cfg):
+    if cfg.loss.name == 'triplet' and cfg.loss.triplet.weight_x == 0:
+        assert cfg.train.fixbase_epoch == 0, \
+            'The output of classifier is not included in the computational graph'
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Fine-tune Models')
-    parser.add_argument('--batch_size', type=int, default=64, help='Batch size for training')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train')
-    parser.add_argument('--learning_rate', type=float, default=0.0003, help='Learning rate')
-    parser.add_argument('--pretrained_model_path', type=str, default='./pretrained_models/osnet_25k.pth', help='Path to pretrained DINO model')
-    parser.add_argument('--pretrained', action='store_true', help='Use pretrained model')
-    parser.add_argument('--unfreeze_last_n', type=int, default=-1, help='Number of last layers to unfreeze')
-    parser.add_argument('--batch_size_train', type=int, default=32, help='Training batch size for ImageDataManager')
-    parser.add_argument('--batch_size_test', type=int, default=100, help='Testing batch size for ImageDataManager')
-    parser.add_argument('--random_seed', type=int, default=42, help='Random seed for reproducibility')
-    parser.add_argument('--arch', type=str, default='osnet', help='Architecture for DINO model')
-    parser.add_argument('--optimizer', type=str, default='adam', help='Optimizer for training')
-    parser.add_argument('--lr_scheduler', type=str, default='single_step', help='Learning rate scheduler for training')
-    parser.add_argument('--stepsize', type=int, default=20, help='Step size for learning rate scheduler')
-    parser.add_argument('--use_wandb', action='store_true', help='Use wandb for logging.')
-    parser.add_argument('--wandb_name', type=str, default='finetune model', help='Name of wandb project')
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        '--config-file', type=str, default='', help='path to config file'
+    )
+    parser.add_argument(
+        '-s',
+        '--sources',
+        type=str,
+        nargs='+',
+        help='source datasets (delimited by space)'
+    )
+    parser.add_argument(
+        '-t',
+        '--targets',
+        type=str,
+        nargs='+',
+        help='target datasets (delimited by space)'
+    )
+    parser.add_argument(
+        '--transforms', type=str, nargs='+', help='data augmentation'
+    )
+    parser.add_argument(
+        '--root', type=str, default='./datasets', help='path to data root'
+    )
+    parser.add_argument(
+        'opts',
+        default=None,
+        nargs=argparse.REMAINDER,
+        help='Modify config options using the command-line'
+    )
+    parser.add_argument('--pretrained_model_path', type=str, default='./pretrained_models/osnet_100k.pth', help='Path to pretrained DINO model')
     args = parser.parse_args()
-    
-    # Logging
-    if args.use_wandb:
-        wandb_logger = WandbLogger(args)
+
+    cfg = get_default_config()
+    cfg.use_gpu = torch.cuda.is_available()
+    if args.config_file:
+        cfg.merge_from_file(args.config_file)
+    reset_config(cfg, args)
+    cfg.merge_from_list(args.opts)
+    set_random_seed(cfg.train.seed)
+    check_cfg(cfg)
+
+    log_name = 'test.log' if cfg.test.evaluate else 'train.log'
+    log_name += time.strftime('-%Y-%m-%d-%H-%M-%S')
+    sys.stdout = Logger(osp.join(cfg.data.save_dir, log_name))
+
+    print('Show configuration\n{}\n'.format(cfg))
+    print('Collecting env info ...')
+    print('** System info **\n{}\n'.format(collect_env_info()))
+
+    if cfg.use_gpu:
+        torch.backends.cudnn.benchmark = True
+
+    datamanager = build_datamanager(cfg)
+
+    if cfg.model.load_weights:
+        dino_model = load_pretrained_dino_model(cfg.model.name, args.pretrained_model_path)
+        print(f"Loaded pretrained DINO model from {args.pretrained_model_path} with {cfg.model.name} architecture.")
+        model = extract_vanilla_model(dino_model, cfg.model.name, datamanager, cfg.model.unfreeze_last_n)
+        pretrained_vanilla_model_path = f"./pretrained_models/pretrained_vanilla_{cfg.model.name}.pth"
+        torch.save(model.state_dict(), pretrained_vanilla_model_path) 
+        cfg['model']['load_weights'] = pretrained_vanilla_model_path
+    else:
+        print('Building model: {}'.format(cfg.model.name))
+        model = torchreid.models.build_model(
+            name=cfg.model.name,
+            num_classes=datamanager.num_train_pids,
+            loss=cfg.loss.name,
+            pretrained=cfg.model.pretrained,
+            use_gpu=cfg.use_gpu
+        )
         
-    # Environment setup
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    table = PrettyTable()
-    table.field_names = ["CUDA", "GPU", "Total Memory (MB)"]
-    if torch.cuda.is_available():
-        num_devices = torch.cuda.device_count()
-        for i in range(num_devices):
-            total_memory = torch.cuda.get_device_properties(i).total_memory / (1024 * 1024)
-            table.add_row([f"CUDA:{i}", torch.cuda.get_device_name(i), f"{total_memory:.2f}"])
-            print(table)
-    else:
-        print("No GPU available.")
-    
-    # Set random seed
-    random_seed = args.random_seed
-    random.seed(random_seed)
-    torch.manual_seed(random_seed)
-    if device == 'cuda':
-        torch.cuda.manual_seed(random_seed)
+    num_params, flops = compute_model_complexity(
+        model, (1, 3, cfg.data.height, cfg.data.width)
+    )
+    print('Model complexity: params={:,} flops={:,}'.format(num_params, flops))
 
-    # Set dataset directories
-    dataset_dir = pl.Path("./dataset")                                          # set dataset directory
-    pa100k_dir = dataset_dir / "PA-100K/imgs"                                   # set pa100k imgs directory
-    market1501_dir = dataset_dir / "Market-1501-v15.09.15/"                     # set pretrained models directory
-    logs_dir ='log/resnet50-triplet-market1501'                                 # set logs directory
-    
-    # Setup Data Manager
-    datamanager = setup_datamanager(dataset_dir, args)
-    
-    # Load and prepare models
-    if args.pretrained:
-        dino_model = load_pretrained_dino_model(args.arch, args.pretrained_model_path, device).to(device)
-        print(f"Loaded pretrained DINO model from {args.pretrained_model_path} with {args.arch} architecture.")
-        model = extract_vanilla_model(dino_model, args.arch, datamanager, args.unfreeze_last_n).to(device)
-    else:
-        model = create_base_models(args.arch, datamanager, device)
-        print(f"Training {args.arch} model from scratch.")
+    if cfg.model.load_weights and check_isfile(cfg.model.load_weights):
+        load_pretrained_weights(model, cfg.model.load_weights)
 
-    # Print model summary
-    print("Model Summary:")
-    summary(model, (3, 256, 128))
-    
-    # Model Complexity
-    print("Model Complexity:")
-    torchreid.utils.compute_model_complexity(model, (1, 3, 256, 128), verbose=True, only_conv_linear=False)
-    
-    # Optimizer, Scheduler, Engine
-    optimizer = torchreid.optim.build_optimizer(model, optim=args.optimizer, lr=args.learning_rate)
-    scheduler = torchreid.optim.build_lr_scheduler(optimizer, lr_scheduler=args.lr_scheduler, stepsize=args.stepsize)
-    engine = torchreid.engine.ImageSoftmaxEngine(datamanager, model, optimizer=optimizer, scheduler=scheduler)
+    if cfg.use_gpu:
+        model = nn.DataParallel(model).cuda()
 
-    # Run training
-    engine.run(max_epoch=args.epochs, save_dir=logs_dir, eval_freq=5, print_freq=1, test_only=False)
-    
-if __name__ == "__main__":
+    optimizer = torchreid.optim.build_optimizer(model, **optimizer_kwargs(cfg))
+    scheduler = torchreid.optim.build_lr_scheduler(
+        optimizer, **lr_scheduler_kwargs(cfg)
+    )
+
+    if cfg.model.resume and check_isfile(cfg.model.resume):
+        cfg.train.start_epoch = resume_from_checkpoint(
+            cfg.model.resume, model, optimizer=optimizer, scheduler=scheduler
+        )
+
+    print(
+        'Building {}-engine for {}-reid'.format(cfg.loss.name, cfg.data.type)
+    )
+    engine = build_engine(cfg, datamanager, model, optimizer, scheduler)
+    engine.run(**engine_run_kwargs(cfg))
+
+
+if __name__ == '__main__':
     main()
-
