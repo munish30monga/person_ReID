@@ -88,12 +88,11 @@ python main.py --config-file ./configs/resnet50_pretrained.yaml --transforms ran
 To train the model from scratch, change the config file to `osnet_x1_0.yaml` or `resnet50.yaml` and remove the `pretrained_model_path` argument. 
 
 ## Visualizations 📊
-
 <table align="center" style="width:100%; table-layout:fixed;">
     <tr>
         <td><img style="width: 100%; height: auto;" src="src/osnet_attn.png"/></td>
         <td><img style="width: 100%; height: auto;" src="src/resnet_attn.png"/></td>
-    </t
+    </tr>
 </table>
 
 * Attention Maps can be visualized using:
