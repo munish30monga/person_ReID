@@ -167,6 +167,7 @@ dino_output
 best_model
 log
 logs
+market1501
 
 # model weights
 *.pth
@@ -177,9 +178,8 @@ logs
 # wandb
 wandb
 
-# imgs
-*.jpg
-*.png
+# imgs folder
+imgs
 
 # torchreid
 deep-person-reid

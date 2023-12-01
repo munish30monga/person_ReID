@@ -100,13 +100,13 @@ if __name__ == '__main__':
     parser.add_argument('--arch', default='vit_small', type=str,
         choices=['vit_tiny', 'vit_small', 'vit_base'], help='Architecture (support only ViT atm).')
     parser.add_argument('--patch_size', default=4, type=int, help='Patch resolution of the model.')
-    parser.add_argument('--pretrained_weights', default='./pretrained_models/osnet_25k.pth', type=str,
+    parser.add_argument('--pretrained_weights', default='./pretrained_models/osnet.pth', type=str,
         help="Path to pretrained weights to load.")
     parser.add_argument("--checkpoint_key", default="teacher", type=str,
         help='Key to use in the checkpoint (example: "teacher")')
     parser.add_argument("--image_path", default='./dataset/PA-100K/dino_training_imgs/000071.jpg', type=str, help="Path of the image to load.")
-    parser.add_argument("--image_size", default=(396, 155), type=int, nargs="+", help="Resize image.")
-    parser.add_argument('--output_dir', default='./imgs/5', help='Path where to save visualizations.')
+    parser.add_argument("--image_size", default=(256, 128), type=int, nargs="+", help="Resize image.")
+    parser.add_argument('--output_dir', default='./imgs/', help='Path where to save visualizations.')
     parser.add_argument("--threshold", type=float, default=None, help="""We visualize masks
         obtained by thresholding the self-attention maps to keep xx% of the mass.""")
     args = parser.parse_args()
