@@ -1,6 +1,6 @@
 model:
   name: 'osnet_x1_0'
-  pretrained: True
+  pretrained: False
 
 data:
   type: 'image'

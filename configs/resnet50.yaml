@@ -1,6 +1,6 @@
 model:
   name: 'resnet50'
-  pretrained: True
+  pretrained: False
 
 data:
   type: 'image'
