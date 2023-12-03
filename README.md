@@ -20,6 +20,7 @@ This is the PyTorch implmentation of the paper **Person Re-Identification throug
   - [Pre-training using DINO framework](#pre-training-using-dino-framework)
   - [Fine-tuning using Torchreid](#fine-tuning-using-torchreid)
   - [Visualizations 📊](#visualizations-)
+  - [References](#references)
   - [Collaborators:](#collaborators)
 
 ## Getting Started 🚀
@@ -99,6 +100,10 @@ To train the model from scratch, change the config file to `osnet_x1_0.yaml` or 
 ```python
 python visualize_attention.py --pretrained_weights ./pretrained_models/osnet.pth
 ``` 
+
+## References
+* https://github.com/facebookresearch/dino
+* https://github.com/KaiyangZhou/deep-person-reid
  
 ## Collaborators:
 [![Munish](https://img.shields.io/badge/22M2153-Munish_Monga-blue)](https://github.com/munish30monga)
